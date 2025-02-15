@@ -27,6 +27,17 @@ func initializeEpoll() (int, error) {
 	return syscall.EpollCreate1(0)
 }
 
+// setupNetworkDevices initializes network devices for packet handling.
+// Creates raw sockets for each network interface and sets up epoll monitoring.
+//
+// Parameters:
+//   - epollFd: File descriptor for epoll
+//
+// Returns:
+//   - []netDevice: Slice of initialized devices
+//   - error: Error if setup fails
+//
+// Filters out interfaces that should be ignored and configures remaining ones.
 func setupNetworkDevices(epollFd int) ([]netDevice, error) {
 	var netDeviceList []netDevice
 	interfaces, err := net.Interfaces()
@@ -52,6 +63,16 @@ func setupNetworkDevices(epollFd int) ([]netDevice, error) {
 	return netDeviceList, nil
 }
 
+// setupSingleDevice sets up a network device for packet capture.
+// Creates raw socket, binds it to interface, adds to epoll monitoring.
+//
+// Parameters:
+//   - epollFd: Epoll file descriptor
+//   - iface: Network interface
+//
+// Returns:
+//   - netDevice: Configured device
+//   - error: Setup error
 func setupSingleDevice(epollFd int, iface net.Interface) (netDevice, error) {
 	sock, err := syscall.Socket(syscall.AF_PACKET, syscall.SOCK_RAW, int(htons(syscall.ETH_P_ALL)))
 	if err != nil {
@@ -79,6 +100,17 @@ func setupSingleDevice(epollFd int, iface net.Interface) (netDevice, error) {
 	return createNetDevice(iface, sock, addr), nil
 }
 
+// eventLoop is the main event processing loop that handles network device events.
+// It continuously waits for events from the epoll instance and processes them.
+//
+// Parameters:
+//   - epollFd: File descriptor for the epoll instance
+//   - netDeviceList: Slice of network devices to monitor
+//
+// Returns:
+//   - error: Returns an error if epoll wait fails or event processing fails
+//
+// The function blocks indefinitely waiting for events and only returns on error.
 func eventLoop(epollFd int, netDeviceList []netDevice) error {
 	events := make([]syscall.EpollEvent, 10)
 
@@ -96,6 +128,17 @@ func eventLoop(epollFd int, netDeviceList []netDevice) error {
 	}
 }
 
+// processEvent handles an epoll event by finding the corresponding network device
+// from the provided list and processing any incoming packets. It iterates through
+// the network device list to find a matching file descriptor, then calls receivePacket
+// on the matching device.
+//
+// Parameters:
+//   - event: The epoll event containing the file descriptor and event flags
+//   - netDeviceList: Slice of network devices to check against the event
+//
+// Returns:
+//   - error: nil on success, or an error if packet reception fails
 func processEvent(event syscall.EpollEvent, netDeviceList []netDevice) error {
 	for _, netDev := range netDeviceList {
 		if int32(netDev.socket) == event.Fd {
