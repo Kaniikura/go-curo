@@ -5,20 +5,36 @@ import (
 	"syscall"
 )
 
-// type ethernetHeader struct {
-// 	destAddr  [6]byte
-// 	srcAddr   [6]byte
-// 	etherType uint16
-// }
+const ETHER_TYPE_IP uint16 = 0x0800
+const ETHER_TYPE_ARP uint16 = 0x0806
+const ETHER_TYPE_IPV6 uint16 = 0x86dd
+const ETHERNET_ADDRESS_LEN = 6
 
-// createNetDevice creates a netDevice from network interface details.
+var ETHERNET_ADDRESS_BROADCAST = [6]uint8{0xff, 0xff, 0xff, 0xff, 0xff, 0xff}
+
+type ethernetHeader struct {
+	destAddr  [6]byte
+	srcAddr   [6]byte
+	etherType uint16
+}
+
+func (ethHdr *ethernetHeader) serialize() []byte {
+	packet := make([]byte, 14)
+	copy(packet[0:6], ethHdr.destAddr[:])
+	copy(packet[6:12], ethHdr.srcAddr[:])
+	copy(packet[12:14], uint16ToByte(ethHdr.etherType))
+
+	return packet
+}
+
+// createPacketHandler creates a PacketHandler from network interface details.
 // Takes interface, socket fd, and link-layer socket address.
-// Returns configured netDevice struct.
-func createNetDevice(iface net.Interface, sock int, addr syscall.SockaddrLinklayer) netDevice {
-	return netDevice{
+// Returns configured PacketHandler struct.
+func createPacketHandler(iface net.Interface, sock int, addr syscall.SockaddrLinklayer) PacketHandler {
+	return PacketHandler{
 		name:          iface.Name,
 		macAddress:    convertMacAddress(iface.HardwareAddr),
-		socket:        sock,
+		socketFD:      sock,
 		socketAddress: addr,
 	}
 }
